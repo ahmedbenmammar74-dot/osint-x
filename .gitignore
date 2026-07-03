@@ -1,0 +1,9 @@
+*
+!*/
+!.gitignore
+!app.py
+!requirements.txt
+!Procfile
+!render.yaml
+!templates/
+!templates/index.html
