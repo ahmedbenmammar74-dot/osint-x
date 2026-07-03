@@ -196,21 +196,21 @@ def login_required(f):
 
 @app.route("/api/me", methods=["GET"])
 def api_me():
-    if "user" in session:
-        users = load_users()
-        u = users.get(session["user"], {})
+    if "user" not in session:
+        return jsonify({"user": None})
+    users = load_users()
+    u = users.get(session["user"], {})
     return jsonify({
         "user": session["user"],
         "email": u.get("email", ""),
         "created": u.get("created", "N/A"),
-        "credits": u.get("credits", "N/A"),
+        "credits": u.get("credits", 0),
         "is_admin": u.get("is_admin", False),
         "theme": u.get("theme", "red"),
         "avatar": u.get("avatar", "1"),
         "banned": u.get("banned", False),
         "warnings": u.get("warnings", [])
     })
-    return jsonify({"user": None})
 
 @app.route("/api/profile", methods=["GET"])
 @login_required
@@ -221,7 +221,7 @@ def api_profile():
         "username": session["user"],
         "created": u.get("created", "N/A"),
         "queries": len(load_history().get(session["user"], [])),
-        "credits": u.get("credits", "N/A"),
+        "credits": u.get("credits", 0),
         "is_admin": u.get("is_admin", False),
         "theme": u.get("theme", "red"),
         "avatar": u.get("avatar", "1"),
