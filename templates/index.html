@@ -397,177 +397,209 @@
     </div>
 </div>
 
-<!-- ===== THREE.JS ===== -->
+<!-- ===== THREE.JS - NEON CYBER TUNNEL ===== -->
 <script>
 (function(){
     const c=document.getElementById('canvas');
     const s=new THREE.Scene();
-    const cam=new THREE.PerspectiveCamera(75,window.innerWidth/window.innerHeight,0.1,1000);
-    const r=new THREE.WebGLRenderer({alpha:true,antialias:!isMobile});
+    const isMobile=window.innerWidth<768||('ontouchstart' in window);
+    const cam=new THREE.PerspectiveCamera(70,window.innerWidth/window.innerHeight,1,2000);
+    const r=new THREE.WebGLRenderer({alpha:true,antialias:!isMobile,powerPreference:'high-performance'});
     r.setSize(window.innerWidth,window.innerHeight);
     r.setPixelRatio(Math.min(window.devicePixelRatio,2));
     c.appendChild(r.domElement);
 
-    const isMobile=window.innerWidth<768||('ontouchstart' in window);
-    const N=isMobile?1200:5000;
-    const sg=new THREE.BufferGeometry();
-    const pos=new Float32Array(N*3),col=new Float32Array(N*3),sizes=new Float32Array(N);
-    for(let i=0;i<N;i++){
-        pos[i*3]=(Math.random()-0.5)*2400;
-        pos[i*3+1]=(Math.random()-0.5)*2400;
-        pos[i*3+2]=(Math.random()-0.5)*2400-200;
-        const h=new THREE.Color().setHSL(0.0+Math.random()*0.06,0.9,0.1+Math.random()*0.25);
-        col[i*3]=h.r;col[i*3+1]=h.g;col[i*3+2]=h.b;
-        sizes[i]=0.5+Math.random()*2.5;
+    const getAC = () => {
+        const comp = getComputedStyle(document.documentElement).getPropertyValue('--accent').trim();
+        if (comp.startsWith('#')) { const h=comp.slice(1); return {r:parseInt(h.slice(0,2),16)/255, g:parseInt(h.slice(2,4),16)/255, b:parseInt(h.slice(4,6),16)/255}; }
+        const m = comp.match(/rgb\s*\(\s*(\d+)\s*,\s*(\d+)\s*,\s*(\d+)/); if (m) return {r:m[1]/255, g:m[2]/255, b:m[3]/255};
+        return {r:1,g:0,b:0.25};
+    };
+    let ac = getAC();
+    const obs = new MutationObserver(() => { ac = getAC(); });
+    obs.observe(document.documentElement, {attributes:true, attributeFilter:['style']});
+
+    // ---- 1. Tunnel particles (streaming toward viewer) ----
+    const tunnelDepth = 1200;
+    const N = isMobile ? 800 : 3000;
+    const tg = new THREE.BufferGeometry();
+    const tpos = new Float32Array(N*3), tcol = new Float32Array(N*3), tspeed = new Float32Array(N), trad = new Float32Array(N);
+    for (let i=0; i<N; i++) {
+        const angle = Math.random() * Math.PI * 2;
+        const radius = 10 + Math.random() * 400;
+        const z = -Math.random() * tunnelDepth;
+        tpos[i*3] = Math.cos(angle) * radius;
+        tpos[i*3+1] = Math.sin(angle) * radius;
+        tpos[i*3+2] = z;
+        trad[i] = radius;
+        tspeed[i] = 0.3 + Math.random() * 1.2;
+        const bright = 0.15 + Math.random() * 0.35;
+        tcol[i*3] = ac.r * bright;
+        tcol[i*3+1] = ac.g * bright;
+        tcol[i*3+2] = ac.b * bright;
     }
-    sg.setAttribute('position',new THREE.BufferAttribute(pos,3));
-    sg.setAttribute('color',new THREE.BufferAttribute(col,3));
-    sg.setAttribute('size',new THREE.BufferAttribute(sizes,1));
-    const sm=new THREE.PointsMaterial({
-        size:1.8,vertexColors:true,transparent:true,opacity:0.7,
-        blending:THREE.AdditiveBlending,sizeAttenuation:true,
+    tg.setAttribute('position', new THREE.BufferAttribute(tpos, 3));
+    tg.setAttribute('color', new THREE.BufferAttribute(tcol, 3));
+    const tm = new THREE.PointsMaterial({
+        size: isMobile ? 3 : 5, vertexColors: true, transparent: true, opacity: 0.6,
+        blending: THREE.AdditiveBlending, sizeAttenuation: true, depthWrite: false
     });
-    const stars=new THREE.Points(sg,sm);
-    s.add(stars);
+    const tunnel = new THREE.Points(tg, tm);
+    s.add(tunnel);
 
-    // Constellation lines (fewer on mobile)
-    const lineCount=isMobile?80:400;
-    const linePairs=[];
-    for(let i=0;i<lineCount;i++){
-        const a=Math.floor(Math.random()*N);
-        const b=Math.floor(Math.random()*N);
-        if(a===b)continue;
-        const dx=pos[a*3]-pos[b*3],dy=pos[a*3+1]-pos[b*3+1],dz=pos[a*3+2]-pos[b*3+2];
-        const dist=Math.sqrt(dx*dx+dy*dy+dz*dz);
-        if(dist<150&&dist>10){
-            linePairs.push(a,b,dist);
+    // ---- 2. Cyber grid rings ----
+    const rings = [];
+    const ringMat = new THREE.LineBasicMaterial({ color: new THREE.Color(ac.r, ac.g, ac.b), transparent: true, opacity: 0.08 });
+    for (let z = -tunnelDepth; z < 50; z += isMobile ? 120 : 80) {
+        const rGeo = new THREE.BufferGeometry();
+        const rPos = [];
+        const segs = isMobile ? 24 : 48;
+        for (let i=0; i<=segs; i++) {
+            const a = (i / segs) * Math.PI * 2;
+            const rad = 50 + (z + tunnelDepth) / tunnelDepth * 350;
+            rPos.push(Math.cos(a)*rad, Math.sin(a)*rad, z);
         }
+        rGeo.setAttribute('position', new THREE.Float32BufferAttribute(rPos, 3));
+        const line = new THREE.Line(rGeo, ringMat);
+        s.add(line);
+        rings.push(line);
     }
-    const lg=new THREE.BufferGeometry();
-    const lpos=[];
-    const lcols=[];
-    for(let i=0;i<linePairs.length;i+=3){
-        const a=linePairs[i],b=linePairs[i+1],d=linePairs[i+2];
-        const alpha=Math.max(0.02,0.12-d/1500);
-        lpos.push(pos[a*3],pos[a*3+1],pos[a*3+2]);
-        lpos.push(pos[b*3],pos[b*3+1],pos[b*3+2]);
-        lcols.push(1,0,alpha);
-        lcols.push(1,0,alpha);
-    }
-    lg.setAttribute('position',new THREE.Float32BufferAttribute(lpos,3));
-    lg.setAttribute('color',new THREE.Float32BufferAttribute(lcols,3));
-    const lm=new THREE.LineBasicMaterial({vertexColors:true,transparent:true,opacity:0.8});
-    const lines=new THREE.LineSegments(lg,lm);
-    s.add(lines);
 
-    // Floating orbs with glow
-    const og=new THREE.Group();
-    const orbs=[];
-    const orbCount=isMobile?5:15;
-    for(let i=0;i<orbCount;i++){
-        const sz=2+Math.random()*15;
-        const ge=new THREE.SphereGeometry(sz,16,16);
-        const ma=new THREE.MeshBasicMaterial({
-            color:new THREE.Color().setHSL(0.0+Math.random()*0.04,0.9,0.12+Math.random()*0.12),
-            transparent:true,opacity:0.02+Math.random()*0.05,wireframe:Math.random()>0.4
+    // ---- 3. Floating holographic shapes ----
+    const shapes = [];
+    const shapeCount = isMobile ? 3 : 10;
+    const geos = [new THREE.TorusKnotGeometry(8,3,64,8), new THREE.IcosahedronGeometry(10,0), new THREE.OctahedronGeometry(10,0), new THREE.TorusGeometry(9,3,16,50)];
+    for (let i=0; i<shapeCount; i++) {
+        const g = geos[i % geos.length];
+        const mat = new THREE.MeshBasicMaterial({
+            color: new THREE.Color(ac.r, ac.g, ac.b),
+            wireframe: true, transparent: true, opacity: 0.04 + Math.random() * 0.06
         });
-        const me=new THREE.Mesh(ge,ma);
-        const range=600;
-        me.position.set((Math.random()-0.5)*range,(Math.random()-0.5)*range,(Math.random()-0.5)*range-100);
-        me.userData={
-            spd:0.05+Math.random()*0.2,rot:0.002+Math.random()*0.01,
-            off:Math.random()*Math.PI*2,
-            ax:me.position.x,ay:me.position.y,az:me.position.z,
-            rad:20+Math.random()*60
+        const mesh = new THREE.Mesh(g.clone(), mat);
+        const range = 500;
+        mesh.position.set((Math.random()-0.5)*range, (Math.random()-0.5)*range, -Math.random()*800);
+        mesh.scale.setScalar(0.5 + Math.random() * 1.5);
+        mesh.userData = {
+            rotSpd: {x:(Math.random()-0.5)*0.01, y:(Math.random()-0.5)*0.01, z:(Math.random()-0.5)*0.005},
+            floatAmp: 5+Math.random()*20, floatSpd: 0.3+Math.random()*0.5, off: Math.random()*6,
+            baseY: mesh.position.y
         };
-        og.add(me);
-        orbs.push(me);
+        s.add(mesh);
+        shapes.push(mesh);
     }
-    s.add(og);
 
-    // Mouse-reactive particles layer
-    const mpg=new THREE.BufferGeometry();
-    const mpn=isMobile?60:200;
-    const mpos=new Float32Array(mpn*3);
-    for(let i=0;i<mpn;i++){
-        mpos[i*3]=(Math.random()-0.5)*600;
-        mpos[i*3+1]=(Math.random()-0.5)*600;
-        mpos[i*3+2]=-50+Math.random()*100;
-    }
-    mpg.setAttribute('position',new THREE.BufferAttribute(mpos,3));
-    const mpm=new THREE.PointsMaterial({
-        size:3,color:0xff0040,transparent:true,opacity:0.15,
-        blending:THREE.AdditiveBlending,sizeAttenuation:true
+    // ---- 4. Data particle streams ----
+    const streamCount = isMobile ? 4 : 12;
+    const streams = [];
+    const streamMat = new THREE.PointsMaterial({
+        size: 2, color: new THREE.Color(ac.r, ac.g, ac.b), transparent: true, opacity: 0.2,
+        blending: THREE.AdditiveBlending, sizeAttenuation: true
     });
-    const mouseParticles=new THREE.Points(mpg,mpm);
-    s.add(mouseParticles);
-
-    cam.position.z=500;
-    let mx=0,my=0,tx=0,ty=0;
-
-    document.addEventListener('mousemove',e=>{
-        tx=(e.clientX/window.innerWidth)*2-1;
-        ty=-(e.clientY/window.innerHeight)*2+1;
-    });
-
-    // Touch support
-    document.addEventListener('touchmove',e=>{
-        if(e.touches.length){
-            tx=(e.touches[0].clientX/window.innerWidth)*2-1;
-            ty=-(e.touches[0].clientY/window.innerHeight)*2+1;
+    for (let s2=0; s2<streamCount; s2++) {
+        const sg2 = new THREE.BufferGeometry();
+        const sp = new Float32Array(60 * 3);
+        const angle2 = (s2 / streamCount) * Math.PI * 2;
+        const rad2 = 30 + Math.random() * 60;
+        for (let j=0; j<60; j++) {
+            const pc = j / 60;
+            sp[j*3] = Math.cos(angle2 + pc * 0.3) * (rad2 + pc * 400);
+            sp[j*3+1] = Math.sin(angle2 + pc * 0.3) * (rad2 + pc * 400);
+            sp[j*3+2] = -pc * tunnelDepth;
         }
-    },{passive:true});
+        sg2.setAttribute('position', new THREE.Float32BufferAttribute(sp, 3));
+        const ps = new THREE.Points(sg2, streamMat);
+        s.add(ps);
+        streams.push(ps);
+    }
 
-    let time=0;
-    const mousePos=new THREE.Vector3();
+    // ---- 5. Glow core ----
+    const coreGeo = new THREE.SphereGeometry(8, 16, 16);
+    const coreMat = new THREE.MeshBasicMaterial({
+        color: new THREE.Color(ac.r, ac.g, ac.b), transparent: true, opacity: 0.15
+    });
+    const core = new THREE.Mesh(coreGeo, coreMat);
+    core.position.z = -tunnelDepth * 0.6;
+    s.add(core);
 
-    function animate(){
+    // Mouse/touch
+    let mx = 0, my = 0, tx = 0, ty = 0;
+    document.addEventListener('mousemove', e => { tx = (e.clientX/window.innerWidth)*2-1; ty = -(e.clientY/window.innerHeight)*2+1; });
+    document.addEventListener('touchmove', e => { if (e.touches.length) { tx = (e.touches[0].clientX/window.innerWidth)*2-1; ty = -(e.touches[0].clientY/window.innerHeight)*2+1; } }, {passive:true});
+
+    let time = 0;
+    function animate() {
         requestAnimationFrame(animate);
-        time+=0.002;
+        time += 0.005;
+        mx += (tx - mx) * 0.04;
+        my += (ty - my) * 0.04;
 
-        // Smooth mouse follow
-        mx+=(tx-mx)*0.06;
-        my+=(ty-my)*0.06;
-
-        // Stars rotation + mouse influence
-        stars.rotation.y=time*0.05+mx*0.06;
-        stars.rotation.x=Math.sin(time*0.03)*0.02+my*0.04;
-        lines.rotation.y=stars.rotation.y;
-        lines.rotation.x=stars.rotation.x;
-
-        // Mouse-reactive particles chase cursor
-        mousePos.set(mx*300,my*200,0);
-        const mpAttr=mpg.attributes.position;
-        for(let i=0;i<mpn;i++){
-            const targetX=mousePos.x+(Math.random()-0.5)*200;
-            const targetY=mousePos.y+(Math.random()-0.5)*200;
-            const targetZ=(Math.random()-0.5)*80;
-            mpAttr.array[i*3]+=(targetX-mpAttr.array[i*3])*0.01;
-            mpAttr.array[i*3+1]+=(targetY-mpAttr.array[i*3+1])*0.01;
-            mpAttr.array[i*3+2]+=(targetZ-mpAttr.array[i*3+2])*0.01;
+        // Update accent color from CSS variable
+        const na = getAC();
+        const needsUpdate = na.r !== ac.r || na.g !== ac.g || na.b !== ac.b;
+        if (needsUpdate) {
+            ac = na;
+            tunnel.geometry.attributes.color.array.set(tcol); // reset on theme change
+            ringMat.color.setRGB(ac.r, ac.g, ac.b);
+            streamMat.color.setRGB(ac.r, ac.g, ac.b);
+            coreMat.color.setRGB(ac.r, ac.g, ac.b);
+            shapes.forEach(sh => sh.material.color.setRGB(ac.r, ac.g, ac.b));
         }
-        mpAttr.needsUpdate=true;
 
-        // Orbiting spheres
-        orbs.forEach((o,i)=>{
-            const t=time*2+o.userData.off;
-            o.position.x=o.userData.ax+Math.sin(t*o.userData.spd)*o.userData.rad;
-            o.position.y=o.userData.ay+Math.cos(t*o.userData.spd*0.7)*o.userData.rad*0.6;
-            o.position.z=o.userData.az+Math.sin(t*o.userData.spd*0.5)*o.userData.rad*0.4;
-            o.rotation.x+=o.userData.rot*1.2;
-            o.rotation.y+=o.userData.rot*1.7;
-            o.rotation.z+=o.userData.rot*0.5;
+        // Tunnel particles: move toward viewer and reset
+        const tp = tg.attributes.position.array;
+        const tc = tg.attributes.color.array;
+        for (let i=0; i<N; i++) {
+            tp[i*3+2] += tspeed[i] * 1.5;
+            if (tp[i*3+2] > 50) {
+                tp[i*3+2] = -tunnelDepth;
+                const angle = Math.random() * Math.PI * 2;
+                const rad = 10 + Math.random() * 400;
+                tp[i*3] = Math.cos(angle) * rad;
+                tp[i*3+1] = Math.sin(angle) * rad;
+                trad[i] = rad;
+                tspeed[i] = 0.3 + Math.random() * 1.2;
+                const bright = 0.15 + Math.random() * 0.35;
+                tc[i*3] = ac.r * bright; tc[i*3+1] = ac.g * bright; tc[i*3+2] = ac.b * bright;
+            }
+            // slight spiral wobble
+            const rad = trad[i];
+            tp[i*3] += Math.sin(time * 2 + i * 0.01) * 0.3;
+            tp[i*3+1] += Math.cos(time * 1.5 + i * 0.01) * 0.3;
+        }
+        tg.attributes.position.needsUpdate = true;
+        tg.attributes.color.needsUpdate = true;
+
+        // Rotate rings
+        rings.forEach((ring, i) => { ring.rotation.z = time * 0.02 + i * 0.003; });
+
+        // Float shapes
+        shapes.forEach(sh => {
+            sh.rotation.x += sh.userData.rotSpd.x;
+            sh.rotation.y += sh.userData.rotSpd.y;
+            sh.rotation.z += sh.userData.rotSpd.z;
+            sh.position.y = sh.userData.baseY + Math.sin(time * sh.userData.floatSpd + sh.userData.off) * sh.userData.floatAmp;
         });
 
-        // Camera parallax
-        cam.position.x+=(mx*120-cam.position.x)*0.008;
-        cam.position.y+=(my*80-cam.position.y)*0.008;
-        cam.lookAt(s.position);
+        // Rotate streams
+        streams.forEach((ps, i) => { ps.rotation.z = time * 0.03 + i * 0.5; });
 
-        r.render(s,cam);
+        // Core pulse
+        core.scale.setScalar(1 + Math.sin(time * 2) * 0.15);
+        core.material.opacity = 0.1 + Math.sin(time * 1.5) * 0.05;
+
+        // Camera - subtle rotation influenced by mouse
+        const groupRot = mx * 0.3;
+        const groupTilt = my * 0.2;
+        tunnel.rotation.y = groupRot;
+        tunnel.rotation.x = groupTilt * 0.1;
+        rings.forEach(r2 => { r2.rotation.y = groupRot; r2.rotation.x = groupTilt * 0.1; });
+        streams.forEach(ps => { ps.rotation.y = groupRot; });
+        core.rotation.y = groupRot;
+
+        r.render(s, cam);
     }
     animate();
-    window.addEventListener('resize',()=>{cam.aspect=window.innerWidth/window.innerHeight;cam.updateProjectionMatrix();r.setSize(window.innerWidth,window.innerHeight)});
+    window.addEventListener('resize', () => { cam.aspect=window.innerWidth/window.innerHeight; cam.updateProjectionMatrix(); r.setSize(window.innerWidth,window.innerHeight); });
 })();
 </script>
 
