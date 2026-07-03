@@ -43,9 +43,16 @@ def send_email(to, subject, body):
     except:
         return False
 
-USERS_FILE = os.path.join(os.path.dirname(__file__), "users.json")
+DATA_DIR = os.environ.get("DATA_DIR", os.path.dirname(os.path.abspath(__file__)))
+USERS_FILE = os.path.join(DATA_DIR, "users.json")
+HISTORY_FILE = os.path.join(DATA_DIR, "history.json")
+if not os.path.exists(DATA_DIR):
+    os.makedirs(DATA_DIR, exist_ok=True)
 if not os.path.exists(USERS_FILE):
     with open(USERS_FILE, "w") as f:
+        json.dump({}, f)
+if not os.path.exists(HISTORY_FILE):
+    with open(HISTORY_FILE, "w") as f:
         json.dump({}, f)
 
 ADMIN_USER = "ah.md213"
@@ -426,13 +433,7 @@ def api_announcements():
     ann = load_announcements()
     return jsonify({"announcements": ann})
 
-# ---- History ----
-HISTORY_FILE = os.path.join(os.path.dirname(__file__), "history.json")
-if not os.path.exists(HISTORY_FILE):
-    with open(HISTORY_FILE, "w") as f:
-        json.dump({}, f)
-
-ANNOUNCEMENTS_FILE = os.path.join(os.path.dirname(__file__), "announcements.json")
+ANNOUNCEMENTS_FILE = os.path.join(DATA_DIR, "announcements.json")
 if not os.path.exists(ANNOUNCEMENTS_FILE):
     with open(ANNOUNCEMENTS_FILE, "w") as f:
         json.dump([], f)
